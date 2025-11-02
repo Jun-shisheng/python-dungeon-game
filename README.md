@@ -51,7 +51,7 @@ python-dungeon-game/
 
 1. **下载背景图片**（可选）
    - 从 [Kenney.nl](https://kenney.nl) 或 [OpenGameArt.org](https://opengameart.org) 下载地牢风格背景
-   - 保存为 `images/background/bg_intro.png`
+   - 保存为 `images/background/Background.png`
    - 程序会自动检测并使用
 
 2. **下载字体**（可选）

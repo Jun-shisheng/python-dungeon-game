@@ -1,0 +1,11 @@
+# 字体文件夹
+# 请将字体文件（.ttf 或 .otf 格式）放置在此文件夹中
+# 
+# 支持的字体文件名：
+# - PingFangGongZiTi.ttf (平方公子体)
+# - PingFangZhanLangTi.ttf (平方战狼体)
+# - zhan_ku_gao_duan_hei.ttf (站酷高端黑)
+# - 其他字体文件...
+#
+# 程序会自动检测并使用第一个找到的字体文件
+

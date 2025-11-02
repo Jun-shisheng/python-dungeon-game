@@ -6,7 +6,7 @@
 python-dungeon-game/
 ├── images/
 │   ├── background/       # 背景图片
-│   │   └── bg_intro.png  # 开场背景（示例）
+│   │   └── Background.png  # 开场背景
 │   ├── sprites/          # 精灵图（角色、怪物等）
 │   └── ui/               # UI元素（按钮、图标等）
 ├── fonts/
@@ -22,15 +22,21 @@ python-dungeon-game/
 - 推荐使用 **PNG** 格式（支持透明通道）
 - 背景图片可以是 JPG 或 PNG
 - 命名规范：使用小写字母和下划线，例如：
-  - `bg_intro.png`（开场背景）
+  - `Background.png`（开场背景）
   - `player_idle.png`（玩家待机动画）
   - `button_start.png`（开始按钮）
 
 ### 字体格式
 - 推荐使用 **TTF** 或 **OTF** 格式
-- 像素风格字体推荐：
-  - Press Start 2P（Google Fonts）
-  - 其他免费商用像素字体
+- 个性字体推荐（免费可商用）：
+  - **站酷高端黑** - 简洁现代，适合标题（强烈推荐）
+  - **庞门正道粗书体** - 粗犷有力
+  - **优设标题黑** - 现代感强
+  - **思源黑体** - Adobe/Google开源，清晰易读
+  - **平方系列** - 平方公子体、平方战狼体等
+  - **清松手写体** - 手写风格
+  - **Press Start 2P** - 像素风格（Google Fonts）
+- 详细字体使用指南请查看 `FONTS_GUIDE.md`
 
 ### 音频格式
 - 背景音乐：**OGG** 或 **MP3**
@@ -105,7 +111,7 @@ python-dungeon-game/
 如果你需要快速测试，可以：
 
 1. 下载一个简单的像素背景（从 Kenney.nl 或 OpenGameArt）
-2. 保存为 `images/background/bg_intro.png`
+2. 保存为 `images/background/Background.png`
 3. 下载 Press Start 2P 字体，保存为 `fonts/press_start_2p.ttf`
 
 程序会自动检测这些资源，如果不存在则使用默认样式。

@@ -5,7 +5,7 @@
 from PIL import Image, ImageDraw
 import os
 
-def create_dungeon_background(width=1024, height=768, output_path="images/background/bg_intro.png"):
+def create_dungeon_background(width=1024, height=768, output_path="images/background/Background.png"):
     """创建简单的地牢背景"""
     # 创建图像
     img = Image.new('RGB', (width, height), color=(40, 35, 35))

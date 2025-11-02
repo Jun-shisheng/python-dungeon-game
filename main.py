@@ -8,7 +8,11 @@ import os
 import sys
 
 # 初始化 Pygame
-pygame.init()
+try:
+    pygame.init()
+except Exception as e:
+    print(f"Pygame初始化失败: {e}")
+    sys.exit(1)
 
 # 窗口尺寸（窗口模式）
 WINDOW_WIDTH = 1024
@@ -42,9 +46,14 @@ class Game:
     """游戏主类"""
     
     def __init__(self):
-        # 创建窗口模式（节省资源）
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("地牢冒险")
+        try:
+            # 创建窗口模式（节省资源）
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+            pygame.display.set_caption("地牢冒险")
+        except pygame.error as e:
+            print(f"创建游戏窗口失败: {e}")
+            pygame.quit()
+            raise
         
         # 全屏模式代码（已注释，需要时取消注释）
         # self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
@@ -66,66 +75,155 @@ class Game:
         self.intro_duration = 3000  # 开场动画持续3秒
         
         # 标题动画相关
-        self.title_y_offset = -100
+        self.title_y_offset = -80  # 调整初始偏移，让标题位置更合适
         self.title_animation_speed = 2
+        
+        # 黑色渐亮效果相关
+        self.fade_from_black_alpha = 255  # 从255（全黑）逐渐减少到0（完全显示）
+        self.fade_from_black_speed = 3  # 渐亮速度（每帧减少的alpha值）
+        self.fade_from_black_complete = False  # 渐亮效果是否完成
         
     def load_resources(self):
         """加载游戏资源"""
         # 初始化背景
         self.background = None
         try:
-            # 尝试加载背景图片
-            bg_path = resource_path(os.path.join("images", "background", "bg_intro.png"))
+            # 加载背景图片 Background.png
+            bg_path = resource_path(os.path.join("images", "background", "Background.png"))
             if os.path.exists(bg_path):
                 try:
                     self.background = pygame.image.load(bg_path)
                     self.background = pygame.transform.scale(self.background, (WINDOW_WIDTH, WINDOW_HEIGHT))
+                    print(f"成功加载背景图片: Background.png")
                 except (pygame.error, IOError, OSError) as e:
                     print(f"背景图片加载失败: {e}")
                     self.background = None
+            else:
+                print("背景图片文件不存在: Background.png")
         except Exception as e:
             print(f"背景图片路径处理失败: {e}")
             self.background = None
         
         # 初始化字体为默认值，确保不会为None
-        self.title_font = pygame.font.Font(None, 48)
-        self.subtitle_font = pygame.font.Font(None, 24)
+        self.title_font = pygame.font.Font(None, 72)  # 标题字体（战狼体）
+        self.subtitle_font = pygame.font.Font(None, 28)  # 副标题字体（公子体）
         
         try:
-            # 尝试加载自定义字体
-            font_path = resource_path(os.path.join("fonts", "press_start_2p.ttf"))
-            if os.path.exists(font_path):
-                try:
-                    self.title_font = pygame.font.Font(font_path, 48)
-                    self.subtitle_font = pygame.font.Font(font_path, 24)
-                except (pygame.error, IOError, OSError) as e:
-                    print(f"加载自定义字体失败: {e}，使用默认字体")
-            else:
+            # 分别加载战狼体（标题）和公子体（副标题）
+            fonts_dir = resource_path("fonts")
+            title_font_loaded = False
+            subtitle_font_loaded = False
+            
+            if os.path.exists(fonts_dir):
+                # 获取fonts文件夹中的所有字体文件
+                font_files = []
+                for file in os.listdir(fonts_dir):
+                    if file.lower().endswith(('.ttf', '.otf')):
+                        font_files.append(file)
+                
+                # 加载战狼体（标题）- 优先
+                zhanlang_fonts = [
+                    "PingFangZhanLangTi.ttf", "PingFangZhanLangTi.otf",  # 英文名
+                    "平方战狼体.ttf", "平方战狼体.otf"  # 中文名
+                ]
+                for font_filename in font_files:
+                    if font_filename in zhanlang_fonts:
+                        font_path = os.path.join(fonts_dir, font_filename)
+                        try:
+                            self.title_font = pygame.font.Font(font_path, 80)  # 标题字体大小
+                            print(f"✓ 成功加载标题字体（战狼体）: {font_filename}")
+                            title_font_loaded = True
+                            break
+                        except (pygame.error, IOError, OSError) as e:
+                            print(f"✗ 加载战狼体失败 ({font_filename}): {e}")
+                
+                # 加载公子体（副标题）
+                gongzi_fonts = [
+                    "PingFangGongZiTi.ttf", "PingFangGongZiTi.otf",  # 英文名
+                    "平方公子体.ttf", "平方公子体.otf"  # 中文名
+                ]
+                for font_filename in font_files:
+                    if font_filename in gongzi_fonts:
+                        font_path = os.path.join(fonts_dir, font_filename)
+                        try:
+                            self.subtitle_font = pygame.font.Font(font_path, 32)  # 副标题字体大小
+                            print(f"✓ 成功加载副标题字体（公子体）: {font_filename}")
+                            subtitle_font_loaded = True
+                            break
+                        except (pygame.error, IOError, OSError) as e:
+                            print(f"✗ 加载公子体失败 ({font_filename}): {e}")
+            
+            # 如果字体未完全加载，尝试按特定文件名查找
+            if not title_font_loaded or not subtitle_font_loaded:
+                custom_font_files = [
+                    "PingFangGongZiTi.ttf",  # 平方公子体
+                    "PingFangZhanLangTi.ttf",  # 平方战狼体
+                    "zhan_ku_gao_duan_hei.ttf",  # 站酷高端黑
+                    "pang_men_zheng_dao_cu_shu_ti.ttf",  # 庞门正道粗书体
+                    "you_she_biao_ti_hei.ttf",  # 优设标题黑
+                    "si_yuan_hei_ti.ttf",  # 思源黑体
+                    "press_start_2p.ttf",  # Press Start 2P（像素风格）
+                ]
+                
+                # 补充加载缺失的字体
+                if not title_font_loaded:
+                    for font_filename in ["PingFangZhanLangTi.ttf", "平方战狼体.ttf"]:
+                        if font_filename in custom_font_files:
+                            font_path = resource_path(os.path.join("fonts", font_filename))
+                            if os.path.exists(font_path):
+                                try:
+                                    self.title_font = pygame.font.Font(font_path, 80)
+                                    title_font_loaded = True
+                                    print(f"✓ 补充加载标题字体: {font_filename}")
+                                    break
+                                except (pygame.error, IOError, OSError):
+                                    continue
+                
+                if not subtitle_font_loaded:
+                    for font_filename in ["PingFangGongZiTi.ttf", "平方公子体.ttf"]:
+                        if font_filename in custom_font_files:
+                            font_path = resource_path(os.path.join("fonts", font_filename))
+                            if os.path.exists(font_path):
+                                try:
+                                    self.subtitle_font = pygame.font.Font(font_path, 32)
+                                    subtitle_font_loaded = True
+                                    print(f"✓ 补充加载副标题字体: {font_filename}")
+                                    break
+                                except (pygame.error, IOError, OSError):
+                                    continue
+            
+            # 如果未加载到自定义字体，则使用系统字体
+            if not title_font_loaded or not subtitle_font_loaded:
+                print("ℹ 部分字体未找到，尝试使用系统字体")
                 # 使用系统字体（支持中文）
                 # Windows系统字体
                 if sys.platform == "win32":
                     # 尝试使用Windows系统中文字体
                     font_names = ["Microsoft YaHei", "SimHei", "SimSun", "KaiTi", "FangSong"]
-                    font_loaded = False
+                    sys_font_loaded = False
                     for font_name in font_names:
                         try:
-                            test_font = pygame.font.SysFont(font_name, 48)
+                            test_font = pygame.font.SysFont(font_name, 80 if not title_font_loaded else 72)
                             # 测试是否能渲染中文
                             test_surface = test_font.render("测试", True, (255, 255, 255))
                             if test_surface.get_width() > 0:
-                                self.title_font = test_font
-                                self.subtitle_font = pygame.font.SysFont(font_name, 24)
-                                font_loaded = True
+                                if not title_font_loaded:
+                                    self.title_font = pygame.font.SysFont(font_name, 80)
+                                if not subtitle_font_loaded:
+                                    self.subtitle_font = pygame.font.SysFont(font_name, 32)
+                                sys_font_loaded = True
                                 break
                         except (pygame.error, Exception):
                             continue
-                    if not font_loaded:
+                    if not sys_font_loaded:
                         print("无法加载中文字体，使用默认字体")
                 else:
                     # Linux/Mac使用系统字体
                     try:
-                        self.title_font = pygame.font.SysFont(None, 48)
-                        self.subtitle_font = pygame.font.SysFont(None, 24)
+                        if not title_font_loaded:
+                            self.title_font = pygame.font.SysFont(None, 80)
+                        if not subtitle_font_loaded:
+                            self.subtitle_font = pygame.font.SysFont(None, 32)
                     except (pygame.error, Exception) as e:
                         print(f"加载系统字体失败: {e}，使用默认字体")
         except Exception as e:
@@ -136,9 +234,11 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+                return
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                    return
                 # 空格键或回车键跳过开场动画
                 elif event.key in [pygame.K_SPACE, pygame.K_RETURN]:
                     if self.state == "intro":
@@ -150,33 +250,45 @@ class Game:
     
     def draw_intro(self):
         """绘制开场动画"""
-        # 绘制背景
+        # 首先绘制背景
         if self.background:
             self.screen.blit(self.background, (0, 0))
         else:
             # 如果没有背景图片，绘制渐变色背景
             self.screen.fill(DARK_GRAY)
         
-        # 标题淡入动画（通过调整颜色亮度实现淡入效果）
+        # 如果黑色渐亮效果未完成，显示黑色覆盖层（实现从黑到亮的过渡）
+        if not self.fade_from_black_complete:
+            # 创建黑色覆盖层，alpha值从255逐渐减少到0
+            black_overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+            black_overlay.set_alpha(int(self.fade_from_black_alpha))
+            black_overlay.fill(BLACK)
+            # 绘制黑色覆盖层（实现渐亮效果）
+            self.screen.blit(black_overlay, (0, 0))
+            return  # 渐亮效果完成前不显示文字
+        
+        # 标题淡入动画（使用战狼体，通过调整颜色亮度实现淡入效果）
         title_text = "地牢冒险"
         # 根据alpha值调整颜色亮度实现淡入效果
         alpha_factor = max(0.0, min(1.0, self.intro_alpha / 255.0))
         fade_gold = tuple(int(c * alpha_factor) for c in GOLD)
         if self.title_font:
             title_surface = self.title_font.render(title_text, True, fade_gold)
+            # 标题位置：屏幕中央偏上，调整垂直偏移
             title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, 
-                                                         WINDOW_HEIGHT // 2 + self.title_y_offset))
+                                                         WINDOW_HEIGHT // 2 - 80 + self.title_y_offset))
             self.screen.blit(title_surface, title_rect)
         
-        # 副标题（淡入效果，比标题稍慢）
+        # 副标题（使用公子体，淡入效果，比标题稍慢）
         subtitle_text = "按空格键或点击鼠标开始游戏"
         subtitle_alpha = max(0, self.intro_alpha - 50)
         subtitle_alpha_factor = max(0.0, min(1.0, subtitle_alpha / 255.0))
         fade_white = tuple(int(c * subtitle_alpha_factor) for c in WHITE)
         if self.subtitle_font:
             subtitle_surface = self.subtitle_font.render(subtitle_text, True, fade_white)
+            # 副标题位置：标题下方适当间距（调整间距让画面更合适）
             subtitle_rect = subtitle_surface.get_rect(center=(WINDOW_WIDTH // 2, 
-                                                              WINDOW_HEIGHT // 2 + 100))
+                                                              WINDOW_HEIGHT // 2 + 60))
             self.screen.blit(subtitle_surface, subtitle_rect)
     
     def draw_menu(self):
@@ -187,12 +299,14 @@ class Game:
         else:
             self.screen.fill(DARK_GRAY)
         
+        # 标题（使用战狼体）
         if self.title_font:
             title_text = "地牢冒险"
             title_surface = self.title_font.render(title_text, True, GOLD)
             title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 4))
             self.screen.blit(title_surface, title_rect)
         
+        # 菜单文字（使用公子体）
         if self.subtitle_font:
             menu_text = "主菜单（待实现）"
             menu_surface = self.subtitle_font.render(menu_text, True, WHITE)
@@ -201,13 +315,21 @@ class Game:
             
             hint_text = "按ESC退出"
             hint_surface = self.subtitle_font.render(hint_text, True, WHITE)
-            hint_rect = hint_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 100))
+            hint_rect = hint_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 80))
             self.screen.blit(hint_surface, hint_rect)
     
     def update(self):
         """更新游戏逻辑"""
         if self.state == "intro":
-            # 更新开场动画参数
+            # 首先处理黑色渐亮效果
+            if not self.fade_from_black_complete:
+                self.fade_from_black_alpha -= self.fade_from_black_speed
+                if self.fade_from_black_alpha <= 0:
+                    self.fade_from_black_alpha = 0
+                    self.fade_from_black_complete = True
+                return  # 渐亮效果完成前不更新其他动画
+            
+            # 黑色渐亮效果完成后，更新开场动画参数
             if self.intro_fade_in:
                 self.intro_alpha += 5
                 self.title_y_offset += self.title_animation_speed
@@ -237,20 +359,35 @@ class Game:
     
     def run(self):
         """游戏主循环"""
-        while self.running:
-            self.clock.tick(60)  # 60 FPS
-            self.handle_events()
-            self.update()
-            self.draw()
-        
-        pygame.quit()
-        sys.exit()
+        try:
+            while self.running:
+                self.clock.tick(60)  # 60 FPS
+                self.handle_events()
+                self.update()
+                self.draw()
+        except KeyboardInterrupt:
+            print("\n游戏被用户中断")
+        except Exception as e:
+            print(f"游戏运行时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # 确保pygame正确退出
+            pygame.quit()
+            sys.exit(0)
 
 
 def main():
     """主函数"""
-    game = Game()
-    game.run()
+    try:
+        game = Game()
+        game.run()
+    except Exception as e:
+        print(f"游戏初始化失败: {e}")
+        import traceback
+        traceback.print_exc()
+        pygame.quit()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
