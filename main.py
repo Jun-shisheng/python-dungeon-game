@@ -379,13 +379,20 @@ class Game:
         pygame.display.flip()
 
     def run(self):
-        """游戏主循环（确保60FPS稳定运行）"""
+        """优化主循环，减少不必要的计算"""
         try:
+            # 预计算屏幕尺寸
+            screen_w, screen_h = self.screen.get_size()
+
             while self.running:
-                self.clock.tick(60)  # 强制60帧，确保移动流畅
+                delta_time = self.clock.tick(60)  # 获取帧间隔时间
+
                 self.handle_events()
                 self.update()
                 self.draw()
+
+                # 限制帧率波动
+                pygame.time.delay(max(0, 16 - delta_time))  # 确保至少16ms一帧
         except KeyboardInterrupt:
             print("\n游戏被用户中断")
         except Exception as e:
