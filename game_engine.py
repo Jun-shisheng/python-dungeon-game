@@ -5,7 +5,7 @@ import math
 from collections import deque
 from map import Map, TILE_EMPTY, TILE_WALL, TILE_STAIRS
 from character import Player
-
+from sprite_loader import SpriteLoader  # 导入精灵加载器
 
 class GameEngine:
     def __init__(self, screen, font):
@@ -17,8 +17,12 @@ class GameEngine:
         self.victory = False
         self.move_speed = 5  # 丝滑移动速度
 
+        # 初始化精灵加载器
+        self.sprite_loader = SpriteLoader()
+        self.sprite_loader.load_sprites()
+
         # 初始化玩家和地图
-        self.player = Player("勇者")
+        self.player = Player("勇者", self.sprite_loader)
         self.map = Map(120, 80)
         self.player.x, self.player.y = self.map.player_position
 
@@ -187,6 +191,12 @@ class GameEngine:
         if can_move_y:
             self.player.y = new_y
 
+        # 同步玩家方向和动画状态
+        is_moving = dx != 0 or dy != 0
+        if is_moving:
+            self.player.set_direction(dx, dy)
+        self.player.set_animation_state(is_moving)
+
     def _can_move(self, x, y, radius):
         """优化碰撞检测，减少计算量"""
         # 只检测必要的点（简化为四个方向）
@@ -211,9 +221,11 @@ class GameEngine:
     # ------------------- 更新与绘制 -------------------
 
     def update(self):
+        delta_time = self.clock.get_time()
         if self.state == "game" and not self.victory:
             self._handle_player_movement()
             self._check_victory()
+            self.player.update_animation(delta_time)
 
         # 优化相机平滑跟随（减少计算量）
         target_x = self.player.x - self.screen.get_width() // 2
@@ -227,12 +239,10 @@ class GameEngine:
         self.screen.fill((0, 0, 0))
         self.map.render(self.screen, self.camera_x, self.camera_y)
 
-        # 绘制玩家（固定屏幕中心）
+        # 绘制玩家（使用精灵动画）
         player_screen_x = self.screen.get_width() // 2
         player_screen_y = self.screen.get_height() // 2
-        pygame.draw.circle(self.screen, self.player.color,
-                           (int(player_screen_x), int(player_screen_y)),
-                           self.player.radius)
+        self.player.draw(self.screen, player_screen_x, player_screen_y)
 
         # 绘制终点（专属标记）
         end_screen_x = self.end_room[0] - self.camera_x
@@ -278,6 +288,9 @@ class GameEngine:
 
     def handle_events(self, events):
         for event in events:
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r and self.victory:
                     # 重新生成地牢时增加保护机制
@@ -291,6 +304,10 @@ class GameEngine:
                     except Exception as e:
                         print(f"地图生成失败，重试: {e}")
                         self.__init__(self.screen, self.font)
+                elif event.key == pygame.K_j:  # J键攻击
+                    self.player.attack()
+                elif event.key == pygame.K_k:  # K键闪避
+                    self.player.hurt()
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
