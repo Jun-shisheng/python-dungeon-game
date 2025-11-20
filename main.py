@@ -77,6 +77,19 @@ class Game:
         self.fade_from_black_speed = 3  # 渐亮速度（每帧减少的alpha值）
         self.fade_from_black_complete = False  # 渐亮效果是否完成
 
+        # 新增功能：帧率显示相关
+        self.show_fps = False
+        self.fps_counter = 0
+        self.fps_timer = 0
+        self.current_fps = 0
+
+        # 新增功能：暂停状态
+        self.paused = False
+
+        # 新增功能：全屏状态
+        self.fullscreen = False
+        self.windowed_size = (WINDOW_WIDTH, WINDOW_HEIGHT)
+
     def load_resources(self):
         """加载游戏资源"""
         # 初始化背景
@@ -224,7 +237,7 @@ class Game:
             print(f"字体加载过程出错: {e}，使用默认字体")
 
     def handle_events(self):
-        """处理事件，确保游戏状态下事件正常传递"""
+        """处理事件，包括新增的暂停和全屏切换"""
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
@@ -233,8 +246,11 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.state == "game":
-                        self.game_engine = None
-                        self.state = "menu"
+                        if self.paused:  # 如果已暂停，按ESC继续游戏
+                            self.paused = False
+                        else:
+                            self.game_engine = None
+                            self.state = "menu"
                     else:
                         self.running = False
                     return
@@ -243,6 +259,8 @@ class Game:
                         self.state = "menu"
                     elif self.state == "menu":
                         self._start_new_game()
+                    elif self.state == "game" and event.key == pygame.K_SPACE:  # 游戏中按空格暂停
+                        self.paused = not self.paused
                 elif event.key in [pygame.K_1, pygame.K_KP1]:
                     print("键盘按键：1 - 开始新游戏")
                     self._start_new_game()
@@ -251,6 +269,13 @@ class Game:
                         print("键盘按键：3/Q - 退出游戏")
                         self.running = False
                         return
+                # 新增：F1显示/隐藏帧率
+                elif event.key == pygame.K_F1:
+                    self.show_fps = not self.show_fps
+                # 新增：F11切换全屏
+                elif event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state == "intro":
                     self.state = "menu"
@@ -258,7 +283,7 @@ class Game:
                     self._handle_menu_click(event.pos)
 
         # 游戏状态下传递事件（仅保留重启功能）
-        if self.state == "game" and self.game_engine:
+        if self.state == "game" and self.game_engine and not self.paused:  # 暂停时不传递事件
             self.game_engine.handle_events(events)
 
     def _handle_menu_click(self, pos):
@@ -284,6 +309,25 @@ class Game:
         print("新游戏启动")
         self.game_engine = GameEngine(self.screen, self.subtitle_font)
         self.state = "game"
+        self.paused = False  # 重置暂停状态
+
+    def toggle_fullscreen(self):
+        """切换全屏/窗口模式"""
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            # 保存当前窗口尺寸以便恢复
+            self.windowed_size = self.screen.get_size()
+            # 设置为全屏模式
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            # 恢复窗口模式
+            self.screen = pygame.display.set_mode(self.windowed_size)
+
+        # 重新调整背景（如果有）
+        if self.background:
+            self.background = pygame.transform.scale(self.background, self.screen.get_size())
+
+        print(f"切换至{'全屏' if self.fullscreen else '窗口'}模式")
 
     def update(self):
         """确保游戏状态下持续更新"""
@@ -308,7 +352,7 @@ class Game:
                     self.intro_alpha -= 3
                     if self.intro_alpha <= 0:
                         self.state = "menu"
-        elif self.state == "game":
+        elif self.state == "game" and not self.paused:  # 暂停时不更新游戏状态
             if self.game_engine:
                 self.game_engine.update()  # 强制每帧更新游戏引擎
 
@@ -319,7 +363,7 @@ class Game:
         else:
             self.screen.fill(DARK_GRAY)
         if not self.fade_from_black_complete:
-            black_overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+            black_overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()))
             black_overlay.set_alpha(int(self.fade_from_black_alpha))
             black_overlay.fill(BLACK)
             self.screen.blit(black_overlay, (0, 0))
@@ -329,8 +373,8 @@ class Game:
         fade_gold = tuple(int(c * alpha_factor) for c in GOLD)
         if self.title_font:
             title_surface = self.title_font.render(title_text, True, fade_gold)
-            title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2,
-                                                         WINDOW_HEIGHT // 2 - 80 + self.title_y_offset))
+            title_rect = title_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                         self.screen.get_height() // 2 - 80 + self.title_y_offset))
             self.screen.blit(title_surface, title_rect)
         subtitle_text = "按空格键或点击鼠标开始游戏"
         subtitle_alpha = max(0, self.intro_alpha - 50)
@@ -338,8 +382,8 @@ class Game:
         fade_white = tuple(int(c * subtitle_alpha_factor) for c in WHITE)
         if self.subtitle_font:
             subtitle_surface = self.subtitle_font.render(subtitle_text, True, fade_white)
-            subtitle_rect = subtitle_surface.get_rect(center=(WINDOW_WIDTH // 2,
-                                                              WINDOW_HEIGHT // 2 + 60))
+            subtitle_rect = subtitle_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                              self.screen.get_height() // 2 + 60))
             self.screen.blit(subtitle_surface, subtitle_rect)
 
     def draw_menu(self):
@@ -351,20 +395,20 @@ class Game:
         if self.title_font:
             title_text = "地牢冒险"
             title_surface = self.title_font.render(title_text, True, GOLD)
-            title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 4))
+            title_rect = title_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 4))
             self.screen.blit(title_surface, title_rect)
         if self.subtitle_font:
             options = [
-                ("1. 开始新游戏", WINDOW_HEIGHT//2),
-                ("3. 退出游戏", WINDOW_HEIGHT//2 + 50)
+                ("1. 开始新游戏", self.screen.get_height()//2),
+                ("3. 退出游戏", self.screen.get_height()//2 + 50)
             ]
             for text, y in options:
                 surf = self.subtitle_font.render(text, True, WHITE)
-                text_rect = surf.get_rect(center=(WINDOW_WIDTH//2, y))
+                text_rect = surf.get_rect(center=(self.screen.get_width()//2, y))
                 self.screen.blit(surf, text_rect)
-            hint_text = "使用数字键1-3选择，或点击对应选项"
+            hint_text = "使用数字键1-3选择，或点击对应选项 | F11: 全屏切换"
             hint_surface = self.subtitle_font.render(hint_text, True, (200, 200, 200))
-            hint_rect = hint_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 60))
+            hint_rect = hint_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() - 60))
             self.screen.blit(hint_surface, hint_rect)
 
     def draw(self):
@@ -376,16 +420,41 @@ class Game:
         elif self.state == "game":
             if self.game_engine:
                 self.game_engine.draw()
+                # 绘制暂停提示
+                if self.paused:
+                    pause_surface = self.title_font.render("暂停中", True, GOLD)
+                    pause_rect = pause_surface.get_rect(center=(self.screen.get_width()//2, self.screen.get_height()//2))
+                    # 添加半透明背景
+                    overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 128))  # 半透明黑色
+                    self.screen.blit(overlay, (0, 0))
+                    self.screen.blit(pause_surface, pause_rect)
+                    hint_surface = self.subtitle_font.render("按空格键继续", True, WHITE)
+                    hint_rect = hint_surface.get_rect(center=(self.screen.get_width()//2, self.screen.get_height()//2 + 60))
+                    self.screen.blit(hint_surface, hint_rect)
+
+        # 显示帧率
+        if self.show_fps and self.subtitle_font:
+            fps_text = f"FPS: {self.current_fps}"
+            fps_surface = self.subtitle_font.render(fps_text, True, (0, 255, 0))
+            self.screen.blit(fps_surface, (10, 10))
+
         pygame.display.flip()
 
     def run(self):
-        """优化主循环，减少不必要的计算"""
+        """优化主循环，增加新功能"""
         try:
-            # 预计算屏幕尺寸
-            screen_w, screen_h = self.screen.get_size()
-
             while self.running:
-                delta_time = self.clock.tick(60)  # 获取帧间隔时间
+                # 获取帧间隔时间
+                delta_time = self.clock.tick(60)
+
+                # 帧率计算
+                self.fps_counter += 1
+                self.fps_timer += delta_time
+                if self.fps_timer >= 1000:  # 每秒更新一次帧率
+                    self.current_fps = self.fps_counter
+                    self.fps_counter = 0
+                    self.fps_timer = 0
 
                 self.handle_events()
                 self.update()

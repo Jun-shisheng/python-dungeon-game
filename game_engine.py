@@ -7,6 +7,14 @@ from map import Map, TILE_EMPTY, TILE_WALL, TILE_STAIRS
 from character import Player
 from sprite_loader import SpriteLoader  # 导入精灵加载器
 
+# 颜色定义（补充必要颜色常量）
+GOLD = (255, 215, 0)
+YELLOW = (255, 255, 0)
+ORANGE = (255, 100, 0)
+GREEN = (0, 255, 0)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+
 class GameEngine:
     def __init__(self, screen, font):
         self.screen = screen
@@ -19,7 +27,8 @@ class GameEngine:
 
         # 初始化精灵加载器
         self.sprite_loader = SpriteLoader()
-        self.sprite_loader.load_sprites()
+        print("开始加载精灵资源...")
+        self.sprite_loader.load_sprites()  # 加载所有动画帧
 
         # 初始化玩家和地图
         self.player = Player("勇者", self.sprite_loader)
@@ -157,11 +166,17 @@ class GameEngine:
             return (x, y)
         return min(self.room_centers, key=lambda c: self._manhattan_dist((x, y), c))
 
+    # 修改game_engine.py中的_handle_player_movement方法
     def _handle_player_movement(self):
+        # 仅胜利状态下禁止移动，攻击状态允许移动（移除攻击状态判断）
+        if self.victory:
+            self.player.set_animation_state(is_moving=False)
+            return
+
         keys = pygame.key.get_pressed()
         dx, dy = 0, 0
 
-        # 减少条件判断次数，直接计算移动向量
+        # 移动逻辑保持不变
         if keys[pygame.K_w]:
             dy -= self.move_speed
         if keys[pygame.K_s]:
@@ -171,18 +186,17 @@ class GameEngine:
         if keys[pygame.K_d]:
             dx += self.move_speed
 
-        # 优化对角线移动计算（避免浮点数乘法）
+        # 优化对角线移动
         if dx != 0 and dy != 0:
-            factor = 0.7071  # 预计算√2/2的值
+            factor = 0.7071
             dx = int(dx * factor) if dx != 0 else 0
             dy = int(dy * factor) if dy != 0 else 0
 
-        # 合并移动检测逻辑
+        # 碰撞检测
         new_x = self.player.x + dx
         new_y = self.player.y + dy
         r = self.player.radius
 
-        # 减少碰撞检测次数（合并检测）
         can_move_x = self._can_move(new_x, self.player.y, r)
         can_move_y = self._can_move(self.player.x, new_y, r)
 
@@ -191,7 +205,7 @@ class GameEngine:
         if can_move_y:
             self.player.y = new_y
 
-        # 同步玩家方向和动画状态
+        # 更新动画状态（即使在攻击中也更新移动状态）
         is_moving = dx != 0 or dy != 0
         if is_moving:
             self.player.set_direction(dx, dy)
@@ -217,6 +231,7 @@ class GameEngine:
         if self._manhattan_dist((self.player.x, self.player.y), self.end_room) <= 30:
             self.victory = True
             self.state = "victory"
+            print("🎉 到达最远房间！游戏胜利！")
 
     # ------------------- 更新与绘制 -------------------
 
@@ -225,7 +240,7 @@ class GameEngine:
         if self.state == "game" and not self.victory:
             self._handle_player_movement()
             self._check_victory()
-            self.player.update_animation(delta_time)
+            self.player.update_animation(delta_time)  # 驱动攻击动画自动播放
 
         # 优化相机平滑跟随（减少计算量）
         target_x = self.player.x - self.screen.get_width() // 2
@@ -236,7 +251,7 @@ class GameEngine:
         self.camera_y += int((target_y - self.camera_y) * 0.1)
 
     def draw(self):
-        self.screen.fill((0, 0, 0))
+        self.screen.fill(BLACK)
         self.map.render(self.screen, self.camera_x, self.camera_y)
 
         # 绘制玩家（使用精灵动画）
@@ -251,7 +266,7 @@ class GameEngine:
         # 外圈闪烁光环
         pulse = abs(math.sin(pygame.time.get_ticks() * 0.003)) * 0.5 + 0.5
         outer_radius = int(20 + pulse * 8)
-        pygame.draw.circle(self.screen, (255, 215, 0),
+        pygame.draw.circle(self.screen, GOLD,
                            (int(end_screen_x), int(end_screen_y)),
                            outer_radius, 2)
 
@@ -263,25 +278,29 @@ class GameEngine:
             y1 = end_screen_y + math.sin(a) * 15
             x2 = end_screen_x + math.cos(a) * 8
             y2 = end_screen_y + math.sin(a) * 8
-            pygame.draw.line(self.screen, (255, 255, 0),
+            pygame.draw.line(self.screen, YELLOW,
                              (int(x1), int(y1)), (int(x2), int(y2)), 2)
 
         # 内圈实心圆
-        pygame.draw.circle(self.screen, (255, 215, 0),
+        pygame.draw.circle(self.screen, GOLD,
                            (int(end_screen_x), int(end_screen_y)), 6, 0)
-        pygame.draw.circle(self.screen, (255, 100, 0),
+        pygame.draw.circle(self.screen, ORANGE,
                            (int(end_screen_x), int(end_screen_y)), 3, 0)
 
         # 提示文字
         hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))}"
-        hint_surface = self.font.render(hint_text, True, (255, 255, 255))
+        hint_surface = self.font.render(hint_text, True, WHITE)
         self.screen.blit(hint_surface, (10, 10))
 
         if self.victory:
             victory_text = "🎉 到达最远房间！按R重新开始 🎉"
-            victory_surface = self.font.render(victory_text, True, (0, 255, 0))
+            victory_surface = self.font.render(victory_text, True, GREEN)
             rect = victory_surface.get_rect(center=(self.screen.get_width() // 2,
                                                     self.screen.get_height() // 2))
+            # 半透明背景框
+            bg_rect = rect.inflate(20, 10)
+            pygame.draw.rect(self.screen, (0, 0, 0, 128), bg_rect, 0)
+            pygame.draw.rect(self.screen, GOLD, bg_rect, 2)
             self.screen.blit(victory_surface, rect)
 
         pygame.display.flip()
@@ -304,10 +323,21 @@ class GameEngine:
                     except Exception as e:
                         print(f"地图生成失败，重试: {e}")
                         self.__init__(self.screen, self.font)
+                        # 在 handle_events 方法中修改攻击触发逻辑（约第315行）
+
                 elif event.key == pygame.K_j:  # J键攻击
-                    self.player.attack()
-                elif event.key == pygame.K_k:  # K键闪避
-                    self.player.hurt()
+                        if not self.player.is_attacking and not self.victory:
+                            self.player.start_attack()
+                            # 输出当前攻击类型和可用帧数（方便调试）
+                            attack_frames = self.sprite_loader.get_animation_frames(
+                                f"attack{self.player.current_attack_type}")
+                            print(
+                                f"🎮 按下J键 - 攻击类型: attack{self.player.current_attack_type}（可用帧数: {len(attack_frames)}）")
+                elif event.key == pygame.K_k:  # K键闪避（兼容判断）
+                    if not self.player.is_attacking and not self.victory:
+                        if hasattr(self.player, 'hurt'):
+                            self.player.hurt()
+                            print("触发闪避")
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
