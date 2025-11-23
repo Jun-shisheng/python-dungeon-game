@@ -6,15 +6,13 @@ from collections import deque
 from map import Map, TILE_EMPTY, TILE_WALL, TILE_STAIRS
 from character import Player
 from sprite_loader import SpriteLoader
-
-# 颜色定义
+# 颜色定义（原有代码不变）
 GOLD = (255, 215, 0)
 YELLOW = (255, 255, 0)
 ORANGE = (255, 100, 0)
 GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-
 
 class GameEngine:
     def __init__(self, screen, font):
@@ -25,16 +23,16 @@ class GameEngine:
         self.state = "game"
         self.victory = False
         self.move_speed = 5
-
-        # 初始化精灵加载器
+        # 初始化精灵加载器（原有代码不变）
         self.sprite_loader = SpriteLoader()
         print("开始加载精灵资源...")
         self.sprite_loader.load_sprites()
-
-        # 初始化玩家和地图
+        # 初始化玩家和地图（原有代码不变）
         self.player = Player("勇者", self.sprite_loader)
         self.map = Map(120, 80)
         self.player.x, self.player.y = self.map.player_position
+        # ------------------- 新增：给玩家设置地图引用（用于闪避碰撞检测） -------------------
+        self.player.set_map_reference(self.map)
 
         # 获取所有房间中心
         self.room_centers = self.map.get_room_centers()
@@ -259,7 +257,7 @@ class GameEngine:
                            (int(end_screen_x), int(end_screen_y)), 3, 0)
 
         # 提示文字
-        hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))} | 按J攻击"
+        hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))} | 按J攻击，按K闪避"
         hint_surface = self.font.render(hint_text, True, WHITE)
         self.screen.blit(hint_surface, (10, 10))
 
@@ -289,6 +287,10 @@ class GameEngine:
                         self.player.start_attack()
                     continue
 
+                if event.key == pygame.K_k:
+                    if not self.victory:
+                        self.player.start_evade()  # 调用闪避方法
+                    continue
                 # R键重新开始
                 if event.key == pygame.K_r and self.victory:
                     try:
@@ -298,12 +300,6 @@ class GameEngine:
                     except Exception as e:
                         print(f"地图生成失败，重试: {e}")
                         self.__init__(self.screen, self.font)
-                    continue
-
-                # K键闪避
-                if event.key == pygame.K_k:
-                    if hasattr(self.player, 'hurt'):
-                        self.player.hurt()
                     continue
 
                 # ESC键退出
