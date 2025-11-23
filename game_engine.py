@@ -5,15 +5,16 @@ import math
 from collections import deque
 from map import Map, TILE_EMPTY, TILE_WALL, TILE_STAIRS
 from character import Player
-from sprite_loader import SpriteLoader  # 导入精灵加载器
+from sprite_loader import SpriteLoader
 
-# 颜色定义（补充必要颜色常量）
+# 颜色定义
 GOLD = (255, 215, 0)
 YELLOW = (255, 255, 0)
 ORANGE = (255, 100, 0)
 GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+
 
 class GameEngine:
     def __init__(self, screen, font):
@@ -23,12 +24,12 @@ class GameEngine:
         self.FPS = 60
         self.state = "game"
         self.victory = False
-        self.move_speed = 5  # 丝滑移动速度
+        self.move_speed = 5
 
         # 初始化精灵加载器
         self.sprite_loader = SpriteLoader()
         print("开始加载精灵资源...")
-        self.sprite_loader.load_sprites()  # 加载所有动画帧
+        self.sprite_loader.load_sprites()
 
         # 初始化玩家和地图
         self.player = Player("勇者", self.sprite_loader)
@@ -42,7 +43,6 @@ class GameEngine:
         if len(self.room_centers) >= 2:
             self.start_room = self._find_closest_room_center(self.player.x, self.player.y)
 
-            # 使用路径距离而非空间距离选择终点
             farthest_room, path_distance = self._find_farthest_room_by_path(
                 (self.player.x, self.player.y)
             )
@@ -51,7 +51,6 @@ class GameEngine:
                 self.end_room = farthest_room
                 print(f"终点设置完成 - 路径距离: {int(path_distance)}")
             else:
-                # 回退方案：使用空间距离最远的房间
                 max_distance = -1
                 self.end_room = self.start_room
                 for center in self.room_centers:
@@ -62,7 +61,6 @@ class GameEngine:
                             self.end_room = center
                 print(f"使用空间距离回退方案")
         else:
-            # 确保至少有两个有效点
             self.start_room = (self.player.x, self.player.y)
             self.end_room = (self.player.x + 300, self.player.y + 300)
 
@@ -75,18 +73,12 @@ class GameEngine:
     # ------------------- 路径计算相关函数 -------------------
 
     def _find_farthest_room_by_path(self, start_pos):
-        """
-        使用BFS找到从起点出发实际路径最远的房间
-        返回: (房间中心坐标, 路径距离)
-        """
         if not self.room_centers or len(self.room_centers) < 2:
             return None, 0
 
-        # 找到起点所在房间
         start_room = self._find_closest_room_center(start_pos[0], start_pos[1])
 
-        # BFS遍历所有可达房间，记录路径距离
-        visited = {start_room: 0}  # 房间中心 -> 路径距离
+        visited = {start_room: 0}
         queue = deque([(start_room, 0)])
 
         max_distance = 0
@@ -95,17 +87,13 @@ class GameEngine:
         while queue:
             current_room, current_dist = queue.popleft()
 
-            # 遍历所有其他房间，检查是否可达
             for room_center in self.room_centers:
                 if room_center not in visited:
-                    # 检查两个房间是否连通
                     if self._rooms_connected(current_room, room_center):
-                        # 计算实际路径距离（曼哈顿距离作为近似）
                         path_dist = current_dist + self._manhattan_dist(current_room, room_center)
                         visited[room_center] = path_dist
                         queue.append((room_center, path_dist))
 
-                        # 更新最远房间
                         if path_dist > max_distance:
                             max_distance = path_dist
                             farthest_room = room_center
@@ -113,28 +101,20 @@ class GameEngine:
         return farthest_room, max_distance
 
     def _rooms_connected(self, room1, room2):
-        """
-        检查两个房间中心是否通过地板连通
-        使用简化的BFS检查
-        """
         from map import TILE_SIZE
 
-        # 转换为瓦片坐标
         x1, y1 = int(room1[0] // TILE_SIZE), int(room1[1] // TILE_SIZE)
         x2, y2 = int(room2[0] // TILE_SIZE), int(room2[1] // TILE_SIZE)
 
-        # 边界检查
         if not (0 <= x1 < self.map.width and 0 <= y1 < self.map.height):
             return False
         if not (0 <= x2 < self.map.width and 0 <= y2 < self.map.height):
             return False
 
-        # BFS检查连通性
         visited = set()
         queue = deque([(x1, y1)])
         visited.add((x1, y1))
 
-        # 限制搜索范围，提高性能
         max_steps = 1000
         steps = 0
 
@@ -145,7 +125,6 @@ class GameEngine:
             if x == x2 and y == y2:
                 return True
 
-            # 检查四个方向
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nx, ny = x + dx, y + dy
                 if (nx, ny) not in visited:
@@ -166,9 +145,7 @@ class GameEngine:
             return (x, y)
         return min(self.room_centers, key=lambda c: self._manhattan_dist((x, y), c))
 
-    # 修改game_engine.py中的_handle_player_movement方法
     def _handle_player_movement(self):
-        # 仅胜利状态下禁止移动，攻击状态允许移动（移除攻击状态判断）
         if self.victory:
             self.player.set_animation_state(is_moving=False)
             return
@@ -176,7 +153,6 @@ class GameEngine:
         keys = pygame.key.get_pressed()
         dx, dy = 0, 0
 
-        # 移动逻辑保持不变
         if keys[pygame.K_w]:
             dy -= self.move_speed
         if keys[pygame.K_s]:
@@ -186,13 +162,11 @@ class GameEngine:
         if keys[pygame.K_d]:
             dx += self.move_speed
 
-        # 优化对角线移动
         if dx != 0 and dy != 0:
             factor = 0.7071
             dx = int(dx * factor) if dx != 0 else 0
             dy = int(dy * factor) if dy != 0 else 0
 
-        # 碰撞检测
         new_x = self.player.x + dx
         new_y = self.player.y + dy
         r = self.player.radius
@@ -205,23 +179,19 @@ class GameEngine:
         if can_move_y:
             self.player.y = new_y
 
-        # 更新动画状态（即使在攻击中也更新移动状态）
         is_moving = dx != 0 or dy != 0
         if is_moving:
             self.player.set_direction(dx, dy)
         self.player.set_animation_state(is_moving)
 
     def _can_move(self, x, y, radius):
-        """优化碰撞检测，减少计算量"""
-        # 只检测必要的点（简化为四个方向）
         points = [
-            (x - radius, y),  # 左
-            (x + radius, y),  # 右
-            (x, y - radius),  # 上
-            (x, y + radius)  # 下
+            (x - radius, y),
+            (x + radius, y),
+            (x, y - radius),
+            (x, y + radius)
         ]
 
-        # 提前退出检测
         for px, py in points:
             if not self.map.is_passable(px, py):
                 return False
@@ -236,17 +206,21 @@ class GameEngine:
     # ------------------- 更新与绘制 -------------------
 
     def update(self):
-        delta_time = self.clock.get_time()
+        """游戏更新循环"""
+        delta_time = self.clock.tick(self.FPS)
+
+
         if self.state == "game" and not self.victory:
             self._handle_player_movement()
             self._check_victory()
-            self.player.update_animation(delta_time)  # 驱动攻击动画自动播放
 
-        # 优化相机平滑跟随（减少计算量）
+        # 始终驱动动画更新（包括胜利状态）
+        self.player.update_animation(delta_time)
+
+        # 相机跟随
         target_x = self.player.x - self.screen.get_width() // 2
         target_y = self.player.y - self.screen.get_height() // 2
 
-        # 使用整数运算代替浮点数
         self.camera_x += int((target_x - self.camera_x) * 0.1)
         self.camera_y += int((target_y - self.camera_y) * 0.1)
 
@@ -254,23 +228,21 @@ class GameEngine:
         self.screen.fill(BLACK)
         self.map.render(self.screen, self.camera_x, self.camera_y)
 
-        # 绘制玩家（使用精灵动画）
+        # 绘制玩家
         player_screen_x = self.screen.get_width() // 2
         player_screen_y = self.screen.get_height() // 2
         self.player.draw(self.screen, player_screen_x, player_screen_y)
 
-        # 绘制终点（专属标记）
+        # 绘制终点
         end_screen_x = self.end_room[0] - self.camera_x
         end_screen_y = self.end_room[1] - self.camera_y
 
-        # 外圈闪烁光环
         pulse = abs(math.sin(pygame.time.get_ticks() * 0.003)) * 0.5 + 0.5
         outer_radius = int(20 + pulse * 8)
         pygame.draw.circle(self.screen, GOLD,
                            (int(end_screen_x), int(end_screen_y)),
                            outer_radius, 2)
 
-        # 中圈旋转星形标记
         angle = pygame.time.get_ticks() * 0.002
         for i in range(8):
             a = angle + i * math.pi / 4
@@ -281,14 +253,13 @@ class GameEngine:
             pygame.draw.line(self.screen, YELLOW,
                              (int(x1), int(y1)), (int(x2), int(y2)), 2)
 
-        # 内圈实心圆
         pygame.draw.circle(self.screen, GOLD,
                            (int(end_screen_x), int(end_screen_y)), 6, 0)
         pygame.draw.circle(self.screen, ORANGE,
                            (int(end_screen_x), int(end_screen_y)), 3, 0)
 
         # 提示文字
-        hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))}"
+        hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))} | 按J攻击"
         hint_surface = self.font.render(hint_text, True, WHITE)
         self.screen.blit(hint_surface, (10, 10))
 
@@ -297,7 +268,6 @@ class GameEngine:
             victory_surface = self.font.render(victory_text, True, GREEN)
             rect = victory_surface.get_rect(center=(self.screen.get_width() // 2,
                                                     self.screen.get_height() // 2))
-            # 半透明背景框
             bg_rect = rect.inflate(20, 10)
             pygame.draw.rect(self.screen, (0, 0, 0, 128), bg_rect, 0)
             pygame.draw.rect(self.screen, GOLD, bg_rect, 2)
@@ -306,38 +276,37 @@ class GameEngine:
         pygame.display.flip()
 
     def handle_events(self, events):
+        """处理游戏事件"""
         for event in events:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+
             if event.type == pygame.KEYDOWN:
+                # J键攻击 - 最优先检查
+                if event.key == pygame.K_j:
+                    if not self.victory:
+                        self.player.start_attack()
+                    continue
+
+                # R键重新开始
                 if event.key == pygame.K_r and self.victory:
-                    # 重新生成地牢时增加保护机制
                     try:
-                        # 尝试重新初始化
                         self.__init__(self.screen, self.font)
-                        # 验证地图是否有效
                         if len(self.map.get_room_centers()) < 2:
-                            # 地图无效时再次生成
                             self.__init__(self.screen, self.font)
                     except Exception as e:
                         print(f"地图生成失败，重试: {e}")
                         self.__init__(self.screen, self.font)
-                        # 在 handle_events 方法中修改攻击触发逻辑（约第315行）
+                    continue
 
-                elif event.key == pygame.K_j:  # J键攻击
-                        if not self.player.is_attacking and not self.victory:
-                            self.player.start_attack()
-                            # 输出当前攻击类型和可用帧数（方便调试）
-                            attack_frames = self.sprite_loader.get_animation_frames(
-                                f"attack{self.player.current_attack_type}")
-                            print(
-                                f"🎮 按下J键 - 攻击类型: attack{self.player.current_attack_type}（可用帧数: {len(attack_frames)}）")
-                elif event.key == pygame.K_k:  # K键闪避（兼容判断）
-                    if not self.player.is_attacking and not self.victory:
-                        if hasattr(self.player, 'hurt'):
-                            self.player.hurt()
-                            print("触发闪避")
-                elif event.key == pygame.K_ESCAPE:
+                # K键闪避
+                if event.key == pygame.K_k:
+                    if hasattr(self.player, 'hurt'):
+                        self.player.hurt()
+                    continue
+
+                # ESC键退出
+                if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()

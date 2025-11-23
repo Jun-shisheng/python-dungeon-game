@@ -122,7 +122,7 @@ class Game:
             subtitle_font_loaded = False
 
             if os.path.exists(fonts_dir):
-                # 获取fonts文件夹中的所有字体文件
+                # 获取fonts文件夹中的所有字体文件wdj
                 font_files = []
                 for file in os.listdir(fonts_dir):
                     if file.lower().endswith(('.ttf', '.otf')):
