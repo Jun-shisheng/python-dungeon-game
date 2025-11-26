@@ -6,7 +6,12 @@ from collections import deque
 from map import Map, TILE_EMPTY, TILE_WALL, TILE_STAIRS
 from character import Player
 from sprite_loader import SpriteLoader
-# 颜色定义（原有代码不变）
+# game_engine.py 顶部添加导入
+from monster import Monster
+from monster_loader import MonsterLoader
+from map import TILE_EMPTY, TILE_WALL, TILE_STAIRS, TILE_SIZE
+
+# 颜色定义
 GOLD = (255, 215, 0)
 YELLOW = (255, 255, 0)
 ORANGE = (255, 100, 0)
@@ -23,24 +28,26 @@ class GameEngine:
         self.state = "game"
         self.victory = False
         self.move_speed = 5
-        # 初始化精灵加载器（原有代码不变）
+
+        # 精灵加载器
         self.sprite_loader = SpriteLoader()
         print("开始加载精灵资源...")
         self.sprite_loader.load_sprites()
-        # 初始化玩家和地图（原有代码不变）
+
+        # 玩家、地图初始化
         self.player = Player("勇者", self.sprite_loader)
         self.map = Map(120, 80)
         self.player.x, self.player.y = self.map.player_position
-        # ------------------- 新增：给玩家设置地图引用（用于闪避碰撞检测） -------------------
+
+        # 让玩家能用于闪避碰撞检测
         self.player.set_map_reference(self.map)
 
-        # 获取所有房间中心
+        # 房间中心
         self.room_centers = self.map.get_room_centers()
 
-        # 设置起点和终点
+        # 起点/终点选择逻辑（不改动）
         if len(self.room_centers) >= 2:
             self.start_room = self._find_closest_room_center(self.player.x, self.player.y)
-
             farthest_room, path_distance = self._find_farthest_room_by_path(
                 (self.player.x, self.player.y)
             )
@@ -57,18 +64,57 @@ class GameEngine:
                         if dist > max_distance:
                             max_distance = dist
                             self.end_room = center
-                print(f"使用空间距离回退方案")
+                print("使用空间距离回退方案")
         else:
             self.start_room = (self.player.x, self.player.y)
             self.end_room = (self.player.x + 300, self.player.y + 300)
 
-        # 相机初始位置
+        # 相机初始化
         self.camera_x = self.player.x - self.screen.get_width() // 2
         self.camera_y = self.player.y - self.screen.get_height() // 2
 
         print(f"起点: {self.start_room}, 终点: {self.end_room}, 房间数: {len(self.room_centers)}")
 
-    # ------------------- 路径计算相关函数 -------------------
+        # ---------------- 怪物系统初始化 ----------------
+        print("开始加载怪物资源...")
+        self.monster_loader = MonsterLoader()
+        self.monster_loader.load_monster_gifs()  # 加载所有怪物GIF
+        self.monsters = []  # 存储所有怪物实例
+
+        # 修改 game_engine.py 中怪物生成部分（约第95-110行）
+        # 为每个房间创建一个随机怪物（跳过起点和终点房间）
+        for room in self.map.rooms:
+            # 计算房间中心像素坐标
+            room_center = (
+                room["x"] + room["width"] // 2,
+                room["y"] + room["height"] // 2
+            )
+            room_center_pixel = (
+                room_center[0] * TILE_SIZE + TILE_SIZE // 2,
+                room_center[1] * TILE_SIZE + TILE_SIZE // 2
+            )
+
+            # 跳过起点附近和终点房间的怪物生成
+            is_start_room = self._manhattan_dist(room_center_pixel, self.start_room) < 100
+            is_end_room = self._manhattan_dist(room_center_pixel, self.end_room) < 100
+
+            if is_start_room or is_end_room:
+                continue  # 跳过起点和终点房间
+
+            # 随机选择怪物类型
+            monster_type = self.monster_loader.get_random_monster_type()
+            if monster_type:
+                monster = Monster(
+                    monster_type=monster_type,
+                    monster_loader=self.monster_loader,
+                    room=room,
+                    map_instance=self.map
+                )
+                self.monsters.append(monster)
+                print(f"生成怪物：{monster_type}（房间中心：{room_center_pixel}）")
+        print(f"怪物生成完成，共 {len(self.monsters)} 个怪物")
+
+    # ---------------- 路径计算 ----------------
 
     def _find_farthest_room_by_path(self, start_pos):
         if not self.room_centers or len(self.room_centers) < 2:
@@ -133,7 +179,7 @@ class GameEngine:
 
         return False
 
-    # ------------------- 内部逻辑函数 -------------------
+    # ---------------- 内部逻辑 ----------------
 
     def _manhattan_dist(self, pos1, pos2):
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
@@ -147,6 +193,9 @@ class GameEngine:
         if self.victory:
             self.player.set_animation_state(is_moving=False)
             return
+        # 记录移动前的位置（用于碰撞回弹）
+        self.last_player_x = self.player.x
+        self.last_player_y = self.player.y
 
         keys = pygame.key.get_pressed()
         dx, dy = 0, 0
@@ -160,21 +209,19 @@ class GameEngine:
         if keys[pygame.K_d]:
             dx += self.move_speed
 
+        # 斜向速度修正
         if dx != 0 and dy != 0:
             factor = 0.7071
-            dx = int(dx * factor) if dx != 0 else 0
-            dy = int(dy * factor) if dy != 0 else 0
+            dx = int(dx * factor)
+            dy = int(dy * factor)
 
         new_x = self.player.x + dx
         new_y = self.player.y + dy
         r = self.player.radius
 
-        can_move_x = self._can_move(new_x, self.player.y, r)
-        can_move_y = self._can_move(self.player.x, new_y, r)
-
-        if can_move_x:
+        if self._can_move(new_x, self.player.y, r):
             self.player.x = new_x
-        if can_move_y:
+        if self._can_move(self.player.x, new_y, r):
             self.player.y = new_y
 
         is_moving = dx != 0 or dy != 0
@@ -201,21 +248,27 @@ class GameEngine:
             self.state = "victory"
             print("🎉 到达最远房间！游戏胜利！")
 
-    # ------------------- 更新与绘制 -------------------
+    # ---------------- 更新与绘制 ----------------
 
     def update(self):
-        """游戏更新循环"""
         delta_time = self.clock.tick(self.FPS)
-
 
         if self.state == "game" and not self.victory:
             self._handle_player_movement()
             self._check_victory()
+            # ---------------- 新增：更新怪物 ----------------
+            for monster in self.monsters:
+                # 检测玩家是否进入怪物房间（激活怪物）
+                monster.check_player_in_room(self.player.x, self.player.y)
+                # 更新怪物行为（追击玩家）
+                monster.update_behavior(self.player.x, self.player.y)
+                # 更新怪物动画
+                monster.update_animation()
 
-        # 始终驱动动画更新（包括胜利状态）
+        # 让动画永远更新（防止 idle 停住）
         self.player.update_animation(delta_time)
 
-        # 相机跟随
+        # 相机平滑跟随
         target_x = self.player.x - self.screen.get_width() // 2
         target_y = self.player.y - self.screen.get_height() // 2
 
@@ -226,72 +279,78 @@ class GameEngine:
         self.screen.fill(BLACK)
         self.map.render(self.screen, self.camera_x, self.camera_y)
 
-        # 绘制玩家
-        player_screen_x = self.screen.get_width() // 2
-        player_screen_y = self.screen.get_height() // 2
-        self.player.draw(self.screen, player_screen_x, player_screen_y)
+        # ---------------- 新增：绘制怪物（在地图之后、玩家之前） ----------------
+        for monster in self.monsters:
+            monster.draw(self.screen, self.camera_x, self.camera_y)
 
-        # 绘制终点
-        end_screen_x = self.end_room[0] - self.camera_x
-        end_screen_y = self.end_room[1] - self.camera_y
+        # 玩家绘制（永远在画面中心）
+        px = self.screen.get_width() // 2
+        py = self.screen.get_height() // 2
+        self.player.draw(self.screen, px, py)
+
+        # 终点标记
+        end_x = self.end_room[0] - self.camera_x
+        end_y = self.end_room[1] - self.camera_y
 
         pulse = abs(math.sin(pygame.time.get_ticks() * 0.003)) * 0.5 + 0.5
         outer_radius = int(20 + pulse * 8)
-        pygame.draw.circle(self.screen, GOLD,
-                           (int(end_screen_x), int(end_screen_y)),
-                           outer_radius, 2)
+
+        pygame.draw.circle(self.screen, GOLD, (int(end_x), int(end_y)), outer_radius, 2)
 
         angle = pygame.time.get_ticks() * 0.002
         for i in range(8):
             a = angle + i * math.pi / 4
-            x1 = end_screen_x + math.cos(a) * 15
-            y1 = end_screen_y + math.sin(a) * 15
-            x2 = end_screen_x + math.cos(a) * 8
-            y2 = end_screen_y + math.sin(a) * 8
-            pygame.draw.line(self.screen, YELLOW,
-                             (int(x1), int(y1)), (int(x2), int(y2)), 2)
+            x1 = end_x + math.cos(a) * 15
+            y1 = end_y + math.sin(a) * 15
+            x2 = end_x + math.cos(a) * 8
+            y2 = end_y + math.sin(a) * 8
+            pygame.draw.line(self.screen, YELLOW, (int(x1), int(y1)), (int(x2), int(y2)), 2)
 
-        pygame.draw.circle(self.screen, GOLD,
-                           (int(end_screen_x), int(end_screen_y)), 6, 0)
-        pygame.draw.circle(self.screen, ORANGE,
-                           (int(end_screen_x), int(end_screen_y)), 3, 0)
+        pygame.draw.circle(self.screen, GOLD, (int(end_x), int(end_y)), 6)
+        pygame.draw.circle(self.screen, ORANGE, (int(end_x), int(end_y)), 3)
 
-        # 提示文字
-        hint_text = f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | 距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))} | 按J攻击，按K闪避"
-        hint_surface = self.font.render(hint_text, True, WHITE)
-        self.screen.blit(hint_surface, (10, 10))
+        # HUD 信息
+        hint_text = (
+            f"坐标: ({int(self.player.x)}, {int(self.player.y)}) | "
+            f"距终点: {int(self._manhattan_dist((self.player.x, self.player.y), self.end_room))} | "
+            f"按J攻击，按K闪避"
+        )
+        text_surface = self.font.render(hint_text, True, WHITE)
+        self.screen.blit(text_surface, (10, 10))
 
+        # 胜利界面
         if self.victory:
             victory_text = "🎉 到达最远房间！按R重新开始 🎉"
-            victory_surface = self.font.render(victory_text, True, GREEN)
-            rect = victory_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                    self.screen.get_height() // 2))
+            surface = self.font.render(victory_text, True, GREEN)
+            rect = surface.get_rect(center=(self.screen.get_width() // 2,
+                                           self.screen.get_height() // 2))
             bg_rect = rect.inflate(20, 10)
-            pygame.draw.rect(self.screen, (0, 0, 0, 128), bg_rect, 0)
+            pygame.draw.rect(self.screen, BLACK, bg_rect)
             pygame.draw.rect(self.screen, GOLD, bg_rect, 2)
-            self.screen.blit(victory_surface, rect)
+            self.screen.blit(surface, rect)
 
         pygame.display.flip()
 
     def handle_events(self, events):
-        """处理游戏事件"""
         for event in events:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
             if event.type == pygame.KEYDOWN:
-                # J键攻击 - 最优先检查
+                # J 攻击
                 if event.key == pygame.K_j:
                     if not self.victory:
                         self.player.start_attack()
                     continue
 
+                # K 闪避
                 if event.key == pygame.K_k:
                     if not self.victory:
-                        self.player.start_evade()  # 调用闪避方法
+                        self.player.start_evade()
                     continue
-                # R键重新开始
+
+                # 胜利界面 R 重开
                 if event.key == pygame.K_r and self.victory:
                     try:
                         self.__init__(self.screen, self.font)
@@ -302,7 +361,20 @@ class GameEngine:
                         self.__init__(self.screen, self.font)
                     continue
 
-                # ESC键退出
+                # ESC 退出
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
+
+    def _check_monster_collision(self):
+        """检测玩家与怪物的碰撞"""
+        player_radius = self.player.radius
+        for monster in self.monsters:
+            if monster.is_active:  # 只检测激活的怪物
+                # 计算玩家与怪物的距离
+                dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
+                if dist < player_radius + 15:  # 15是怪物碰撞半径
+                    # 碰撞处理：将玩家弹回原位置（或扣血，根据需求扩展）
+                    self.player.x -= self.player.x - self.last_player_x
+                    self.player.y -= self.player.y - self.last_player_y
+                    break
