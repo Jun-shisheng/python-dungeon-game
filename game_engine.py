@@ -18,6 +18,7 @@ ORANGE = (255, 100, 0)
 GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+RED = (255,0,0)
 
 class GameEngine:
     def __init__(self, screen, font):
@@ -44,6 +45,8 @@ class GameEngine:
 
         # 房间中心
         self.room_centers = self.map.get_room_centers()
+
+        self.last_damage_time = 0  # 新增这一行
 
         # 起点/终点选择逻辑（不改动）
         if len(self.room_centers) >= 2:
@@ -256,14 +259,19 @@ class GameEngine:
         if self.state == "game" and not self.victory:
             self._handle_player_movement()
             self._check_victory()
-            # ---------------- 新增：更新怪物 ----------------
-            for monster in self.monsters:
-                # 检测玩家是否进入怪物房间（激活怪物）
+            self._check_monster_collision()  # 移动碰撞检测到攻击逻辑前
+
+            # 处理玩家攻击
+            self._handle_player_attack()
+            # 更新怪物
+            for monster in self.monsters[:]:  # 使用副本迭代以便删除
                 monster.check_player_in_room(self.player.x, self.player.y)
-                # 更新怪物行为（追击玩家）
                 monster.update_behavior(self.player.x, self.player.y)
-                # 更新怪物动画
                 monster.update_animation()
+
+                # 移除死亡怪物
+                if monster.current_health <= 0:
+                    self.monsters.remove(monster)
 
         # 让动画永远更新（防止 idle 停住）
         self.player.update_animation(delta_time)
@@ -329,6 +337,17 @@ class GameEngine:
             pygame.draw.rect(self.screen, GOLD, bg_rect, 2)
             self.screen.blit(surface, rect)
 
+        # 新增：死亡界面
+        if self.state == "gameover":
+            gameover_text = "💀  游戏结束！按R重新开始 💀"
+            surface = self.font.render(gameover_text, True, RED)
+            rect = surface.get_rect(center=(self.screen.get_width() // 2,
+                                            self.screen.get_height() // 2))
+            bg_rect = rect.inflate(20, 10)
+            pygame.draw.rect(self.screen, BLACK, bg_rect)
+            pygame.draw.rect(self.screen, RED, bg_rect, 2)
+            self.screen.blit(surface, rect)
+
         pygame.display.flip()
 
     def handle_events(self, events):
@@ -360,21 +379,69 @@ class GameEngine:
                         print(f"地图生成失败，重试: {e}")
                         self.__init__(self.screen, self.font)
                     continue
+                # 死亡或胜利界面 R 重开
+                if event.key == pygame.K_r and (self.victory or self.state == "gameover"):
+                    try:
+                        self.__init__(self.screen, self.font)
+                        if len(self.map.get_room_centers()) < 2:
+                            self.__init__(self.screen, self.font)
+                    except Exception as e:
+                        print(f"地图生成失败，重试: {e}")
+                        self.__init__(self.screen, self.font)
+                    continue
 
                 # ESC 退出
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
 
+    def _handle_player_attack(self):
+        if not self.player.is_attacking:
+            return
+
+        # 检测攻击范围内的怪物
+        attack_range = 30
+        player_radius = self.player.radius
+
+        for monster in self.monsters:
+            if not monster.is_active:
+                continue
+
+            dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
+            if dist < player_radius + attack_range:
+                # 攻击命中，怪物扣血
+                monster.current_health -= 1
+                print(f"🗡️  击中 {monster.type}! 剩余生命值: {monster.current_health}")
+                # 防止多次攻击同一怪物
+                self.player.is_attacking = False
+                self.player._update_animation_frames()
+                break
+
+    # 在game_engine.py的_check_monster_collision方法中修改，约420-446行
     def _check_monster_collision(self):
-        """检测玩家与怪物的碰撞"""
+        """检测玩家与怪物的碰撞并处理扣血（添加冷却机制和闪避无敌）"""
+        current_time = pygame.time.get_ticks()
+        # 检查是否在冷却时间内（2000毫秒 = 2秒）或玩家正在闪避
+        if current_time - self.last_damage_time < 2000 or self.player.is_evading:
+            return  # 闪避时直接返回，不进行扣血检测
+
         player_radius = self.player.radius
         for monster in self.monsters:
-            if monster.is_active:  # 只检测激活的怪物
-                # 计算玩家与怪物的距离
+            if monster.is_active and monster.current_health > 0:  # 只检测激活且存活的怪物
                 dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
                 if dist < player_radius + 15:  # 15是怪物碰撞半径
-                    # 碰撞处理：将玩家弹回原位置（或扣血，根据需求扩展）
-                    self.player.x -= self.player.x - self.last_player_x
-                    self.player.y -= self.player.y - self.last_player_y
+                    # 玩家扣血
+                    if self.player.current_health > 0:
+                        self.player.current_health -= 1
+                        self.last_damage_time = current_time  # 更新最后扣血时间
+                        print(f"❤️  玩家受伤! 剩余生命值: {self.player.current_health}")
+
+                    # 碰撞回弹
+                    self.player.x = self.last_player_x
+                    self.player.y = self.last_player_y
+
+                    # 玩家死亡处理
+                    if self.player.current_health <= 0:
+                        print("💀  玩家死亡!")
+                        self.state = "gameover"
                     break

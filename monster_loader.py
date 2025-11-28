@@ -88,43 +88,57 @@ class MonsterLoader:
     def _load_gif_frames(self, gif_path):
         frames = []
         try:
-            # 使用imageio.v2并指定格式
-            gif = imageio.mimread(gif_path, memtest=False, pilmode="RGBA", format='GIF')
+            # 使用更稳定的GIF加载方式
+            import imageio.v2 as imageio
+            with imageio.get_reader(gif_path, format='GIF') as reader:
+                for frame in reader:
+                    # 转换为RGBA格式
+                    frame_rgba = frame[:, :, :4] if frame.shape[-1] > 4 else frame
+                    frame_rgba = frame_rgba.astype('uint8')  # 确保数据类型正确
 
-            for frame in gif:
-                # 确保帧数据正确
-                if frame is None:
-                    continue
-
-                # 修复Buffer长度不匹配问题
-                width, height = frame.shape[1], frame.shape[0]
-                bytes_per_pixel = 4  # RGBA
-                expected_length = width * height * bytes_per_pixel
-
-                # 验证数据长度
-                frame_data = frame.tobytes()
-                if len(frame_data) != expected_length:
-                    # 调整数据格式
-                    frame = frame[:, :, :4]  # 确保是RGBA
-                    frame_data = frame.tobytes()
-
-                surf = pygame.image.frombuffer(frame_data, (width, height), "RGBA").convert_alpha()
-                surf = pygame.transform.scale(surf, self.sprite_size)
-                frames.append(surf)
+                    # 转换为Pygame表面
+                    surf = pygame.image.frombuffer(
+                        frame_rgba.tobytes(),
+                        (frame_rgba.shape[1], frame_rgba.shape[0]),
+                        "RGBA"
+                    ).convert_alpha()
+                    surf = pygame.transform.scale(surf, self.sprite_size)
+                    frames.append(surf)
 
         except Exception as e:
-            # 降级方案：尝试静态加载
+            # 增强错误处理
+            print(f"❌ GIF加载错误 {gif_path}: {str(e)}")
+            # 尝试多种降级方案
             try:
-                static = pygame.image.load(gif_path).convert_alpha()
-                static = pygame.transform.scale(static, self.sprite_size)
-                frames.append(static)
-                print(f"⚠️ GIF 解析失败，静态加载: {gif_path}\n原因: {e}")
-            except:
-                # 终极降级：创建占位图
+                # 尝试用Pillow加载
+                from PIL import Image, ImageSequence
+                img = Image.open(gif_path)
+                for frame in ImageSequence.Iterator(img):
+                    frame = frame.convert('RGBA')
+                    mode = frame.mode
+                    size = frame.size
+                    data = frame.tobytes()
+                    surf = pygame.image.fromstring(data, size, mode).convert_alpha()
+                    surf = pygame.transform.scale(surf, self.sprite_size)
+                    frames.append(surf)
+            except Exception as e2:
+                print(f"❌ Pillow加载也失败: {str(e2)}")
+                # 终极降级：创建带问号的占位图
                 placeholder = pygame.Surface(self.sprite_size, pygame.SRCALPHA)
-                pygame.draw.rect(placeholder, (255, 0, 0, 180), (0, 0, self.sprite_size[0], self.sprite_size[1]))
+                pygame.draw.rect(placeholder, (100, 100, 100, 200),
+                                 (0, 0, self.sprite_size[0], self.sprite_size[1]))
+                font = pygame.font.SysFont(None, 24)
+                text = font.render("?", True, (255, 255, 0))
+                text_rect = text.get_rect(center=placeholder.get_rect().center)
+                placeholder.blit(text, text_rect)
                 frames.append(placeholder)
-                print(f"❌ GIF完全加载失败，使用占位图: {gif_path}\n原因: {e}")
+
+        # 确保至少有一帧
+        if not frames:
+            placeholder = pygame.Surface(self.sprite_size, pygame.SRCALPHA)
+            pygame.draw.rect(placeholder, (100, 0, 0, 200),
+                             (0, 0, self.sprite_size[0], self.sprite_size[1]))
+            frames.append(placeholder)
 
         return frames
 

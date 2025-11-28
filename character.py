@@ -24,6 +24,9 @@ class Player:
         # ---------------------------------------------------------
         # 朝向（原有代码不变）
         self.direction = "down"
+
+        self.max_health = 10  # 最大生命值
+        self.current_health = self.max_health  # 当前生命值
         # 初始化动画帧（原有代码不变）
         self._update_animation_frames()
 
@@ -177,6 +180,20 @@ class Player:
             current_sprite = pygame.transform.flip(current_sprite, True, False)
         sprite_rect = current_sprite.get_rect(center=(int(screen_x), int(screen_y)))
         screen.blit(current_sprite, sprite_rect)
+
+        # 绘制血条
+        health_bar_width = 40
+        health_bar_height = 5
+        health_ratio = self.current_health / self.max_health
+
+        # 血条背景
+        pygame.draw.rect(screen, (255, 0, 0),
+                         (screen_x - health_bar_width // 2, screen_y - 30,
+                          health_bar_width, health_bar_height))
+        # 血条前景
+        pygame.draw.rect(screen, (0, 255, 0),
+                         (screen_x - health_bar_width // 2, screen_y - 30,
+                          health_bar_width * health_ratio, health_bar_height))
 
     # ------------------- 新增：关联地图碰撞检测（关键） -------------------
     def set_map_reference(self, map_instance):

@@ -27,7 +27,8 @@ class Monster:
         # 立刻加载 idle 确保怪物可见
         self._update_animation_frames()
 
-
+        self.max_health = 5  # 怪物最大生命值
+        self.current_health = self.max_health  # 当前生命值
 
     # ========== 动画切换 ==========
     def _update_animation_frames(self):
@@ -57,6 +58,23 @@ class Monster:
 
         rect = frame.get_rect(center=(int(screen_x), int(screen_y)))
         screen.blit(frame, rect)
+
+        # 绘制血条
+        health_bar_width = 30
+        health_bar_height = 4
+        health_ratio = self.current_health / self.max_health
+
+        screen_x = self.x - camera_x
+        screen_y = self.y - camera_y
+
+        # 血条背景
+        pygame.draw.rect(screen, (255, 0, 0),
+                         (screen_x - health_bar_width // 2, screen_y - 25,
+                          health_bar_width, health_bar_height))
+        # 血条前景
+        pygame.draw.rect(screen, (0, 255, 0),
+                         (screen_x - health_bar_width // 2, screen_y - 25,
+                          health_bar_width * health_ratio, health_bar_height))
 
     # ========== 激活检测 ==========
     def check_player_in_room(self, player_x, player_y):
