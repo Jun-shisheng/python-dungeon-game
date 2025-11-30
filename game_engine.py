@@ -266,11 +266,20 @@ class GameEngine:
 
             # 处理玩家攻击
             self._handle_player_attack()
-            # 更新怪物
-            for monster in self.monsters[:]:  # 使用副本迭代以便删除
+            # 更新怪物和他们的 projectile
+            for monster in self.monsters[:]:
                 monster.check_player_in_room(self.player.x, self.player.y)
                 monster.update_behavior(self.player.x, self.player.y)
+                monster.update_projectiles()  # 更新小点
                 monster.update_animation()
+
+                # 检测小点是否命中玩家
+                if monster.is_ranged:
+                    for projectile in monster.projectiles[:]:
+                        if projectile.check_collision(self.player):
+                            self._handle_projectile_hit()
+                            monster.projectiles.remove(projectile)
+                            break
 
                 # 移除死亡怪物
                 if monster.current_health <= 0:
@@ -462,3 +471,22 @@ class GameEngine:
                         print("💀  玩家死亡!")
                         self.state = "gameover"
                     break
+
+    # 添加处理 projectile 命中的方法
+    def _handle_projectile_hit(self):
+        """处理小点命中玩家"""
+        current_time = pygame.time.get_ticks()
+        # 检查冷却和闪避状态
+        if current_time - self.last_damage_time < 2000 or self.player.is_evading:
+            return
+
+        # 玩家扣血
+        if self.player.current_health > 0:
+            self.player.current_health -= 1
+            self.last_damage_time = current_time
+            print(f"❤️  玩家被远程攻击击中! 剩余生命值: {self.player.current_health}")
+
+        # 玩家死亡处理
+        if self.player.current_health <= 0:
+            print("💀  玩家死亡!")
+            self.state = "gameover"
