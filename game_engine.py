@@ -48,6 +48,9 @@ class GameEngine:
 
         self.last_damage_time = 0  # 新增这一行
 
+        self.last_attack_sound_time = 0
+        self.attack_sound = None  # 接收主程序传递的攻击音效
+
         # 起点/终点选择逻辑（不改动）
         if len(self.room_centers) >= 2:
             self.start_room = self._find_closest_room_center(self.player.x, self.player.y)
@@ -395,27 +398,41 @@ class GameEngine:
                     pygame.quit()
                     sys.exit()
 
+    # 在_handle_player_attack方法中修改，确保按J立即播放音效
     def _handle_player_attack(self):
         if not self.player.is_attacking:
             return
 
-        # 检测攻击范围内的怪物
+        # 立即播放攻击音效（无需命中检测）
+        current_time = pygame.time.get_ticks()
+        # 200毫秒冷却，防止快速按J重复播放
+        if hasattr(self, 'last_attack_sound_time'):
+            if current_time - self.last_attack_sound_time > 200:
+                if self.attack_sound:
+                    self.attack_sound.play()
+                self.last_attack_sound_time = current_time
+        else:
+            # 初始化冷却时间
+            self.last_attack_sound_time = current_time
+            if self.attack_sound:
+                self.attack_sound.play()
+
+        # 攻击命中检测逻辑（原有不变）
         attack_range = 30
         player_radius = self.player.radius
-
+        hit_monster = False
         for monster in self.monsters:
             if not monster.is_active:
                 continue
-
             dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
             if dist < player_radius + attack_range:
                 # 攻击命中，怪物扣血
                 monster.current_health -= 1
                 print(f"🗡️  击中 {monster.type}! 剩余生命值: {monster.current_health}")
-                # 防止多次攻击同一怪物
-                self.player.is_attacking = False
-                self.player._update_animation_frames()
+                hit_monster = True
                 break
+
+        # 不提前结束攻击状态，让动画完整播放
 
     # 在game_engine.py的_check_monster_collision方法中修改，约420-446行
     def _check_monster_collision(self):

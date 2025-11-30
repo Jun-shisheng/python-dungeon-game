@@ -2,7 +2,6 @@
 Python 地牢游戏 - 主程序
 支持全屏自适应窗口和开场动画
 """
-
 import pygame
 import os
 import sys
@@ -35,10 +34,8 @@ def resource_path(relative_path):
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
-
 class Game:
     """游戏主类"""
-
     def __init__(self):
         try:
             # 创建窗口模式（节省资源）
@@ -90,6 +87,39 @@ class Game:
         self.fullscreen = False
         self.windowed_size = (WINDOW_WIDTH, WINDOW_HEIGHT)
 
+        # 音频相关初始化
+        pygame.mixer.init()
+        self.background_music_playing = False
+        self.background_music = None
+        self.attack_sound = None  # 攻击音效（传递给游戏引擎）
+
+        # 加载背景音乐（适配你的ogg文件路径）
+        self.load_audio_resources()
+
+    def load_audio_resources(self):
+        """加载音频资源（适配实际文件路径）"""
+        try:
+            # 加载背景音乐：sounds/music/background.ogg
+            bgm_path = resource_path(os.path.join("sounds", "music", "background.ogg"))
+            if os.path.exists(bgm_path):
+                pygame.mixer.music.load(bgm_path)
+                pygame.mixer.music.set_volume(0.3)  # 背景音音量30%
+                self.background_music = bgm_path
+                print(f"✓ 成功加载背景音乐: background.ogg")
+            else:
+                print("⚠️ 背景音乐文件不存在: sounds/music/background.ogg")
+
+            # 加载攻击音效：sounds/sfx/attack.flac
+            attack_path = resource_path(os.path.join("sounds", "sfx", "attack.flac"))
+            if os.path.exists(attack_path):
+                self.attack_sound = pygame.mixer.Sound(attack_path)
+                self.attack_sound.set_volume(1.0)  # 提高到最大音量（100%）
+                print(f"✓ 成功加载攻击音效: attack.flac (音量: 100%)")
+            else:
+                print("⚠️ 攻击音效文件不存在: sounds/sfx/attack.flac")
+        except Exception as e:
+            print(f"❌ 音频加载失败: {e}")
+
     def load_resources(self):
         """加载游戏资源"""
         # 初始化背景
@@ -114,15 +144,13 @@ class Game:
         # 初始化字体为默认值，确保不会为None
         self.title_font = pygame.font.Font(None, 72)  # 标题字体（战狼体）
         self.subtitle_font = pygame.font.Font(None, 28)  # 副标题字体（公子体）
-
         try:
             # 分别加载战狼体（标题）和公子体（副标题）
             fonts_dir = resource_path("fonts")
             title_font_loaded = False
             subtitle_font_loaded = False
-
             if os.path.exists(fonts_dir):
-                # 获取fonts文件夹中的所有字体文件wdj
+                # 获取fonts文件夹中的所有字体文件
                 font_files = []
                 for file in os.listdir(fonts_dir):
                     if file.lower().endswith(('.ttf', '.otf')):
@@ -203,7 +231,6 @@ class Game:
             if not title_font_loaded or not subtitle_font_loaded:
                 print("ℹ 部分字体未找到，尝试使用系统字体")
                 # 使用系统字体（支持中文）
-                # Windows系统字体
                 if sys.platform == "win32":
                     # 尝试使用Windows系统中文字体
                     font_names = ["Microsoft YaHei", "SimHei", "SimSun", "KaiTi", "FangSong"]
@@ -248,7 +275,14 @@ class Game:
                     if self.state == "game":
                         if self.paused:  # 如果已暂停，按ESC继续游戏
                             self.paused = False
+                            # 恢复背景音乐
+                            if self.background_music_playing:
+                                pygame.mixer.music.unpause()
                         else:
+                            # 停止背景音乐
+                            if self.background_music_playing:
+                                pygame.mixer.music.stop()
+                                self.background_music_playing = False
                             self.game_engine = None
                             self.state = "menu"
                     else:
@@ -261,6 +295,10 @@ class Game:
                         self._start_new_game()
                     elif self.state == "game" and event.key == pygame.K_SPACE:  # 游戏中按空格暂停
                         self.paused = not self.paused
+                        if self.paused:
+                            pygame.mixer.music.pause()
+                        else:
+                            pygame.mixer.music.unpause()
                 elif event.key in [pygame.K_1, pygame.K_KP1]:
                     print("键盘按键：1 - 开始新游戏")
                     self._start_new_game()
@@ -275,7 +313,6 @@ class Game:
                 # 新增：F11切换全屏
                 elif event.key == pygame.K_F11:
                     self.toggle_fullscreen()
-
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state == "intro":
                     self.state = "menu"
@@ -308,8 +345,14 @@ class Game:
         """开始新游戏"""
         print("新游戏启动")
         self.game_engine = GameEngine(self.screen, self.subtitle_font)
+        # 传递攻击音效到游戏引擎
+        self.game_engine.attack_sound = self.attack_sound
         self.state = "game"
         self.paused = False  # 重置暂停状态
+        # 开始播放背景音乐（循环播放）
+        if self.background_music and not self.background_music_playing:
+            pygame.mixer.music.play(-1)
+            self.background_music_playing = True
 
     def toggle_fullscreen(self):
         """切换全屏/窗口模式"""
@@ -322,11 +365,9 @@ class Game:
         else:
             # 恢复窗口模式
             self.screen = pygame.display.set_mode(self.windowed_size)
-
         # 重新调整背景（如果有）
         if self.background:
             self.background = pygame.transform.scale(self.background, self.screen.get_size())
-
         print(f"切换至{'全屏' if self.fullscreen else '窗口'}模式")
 
     def update(self):
@@ -447,7 +488,6 @@ class Game:
             while self.running:
                 # 获取帧间隔时间
                 delta_time = self.clock.tick(60)
-
                 # 帧率计算
                 self.fps_counter += 1
                 self.fps_timer += delta_time
@@ -469,9 +509,11 @@ class Game:
             import traceback
             traceback.print_exc()
         finally:
+            # 退出时停止所有音效
+            pygame.mixer.music.stop()
+            pygame.mixer.quit()
             pygame.quit()
             sys.exit(0)
-
 
 def main():
     """主函数"""
@@ -484,7 +526,6 @@ def main():
         traceback.print_exc()
         pygame.quit()
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

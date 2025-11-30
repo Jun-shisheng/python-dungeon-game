@@ -16,19 +16,19 @@ class Player:
         # 攻击状态配置（原有代码不变）
         self.is_attacking = False
         self.current_attack_type = 1  # 1→2→3循环
-        # ------------------- 新增：闪避状态配置 -------------------
-        self.is_evading = False  # 闪避状态标记
-        self.current_evade_type = 1  # 闪避类型循环（1→2→3）
-        self.evade_distance = 20  # 闪避位移距离（可调整）
-        self.evade_completed = False  # 闪避位移是否完成
-        # ---------------------------------------------------------
-        # 朝向（原有代码不变）
+        # 闪避状态配置（原有代码不变）
+        self.is_evading = False
+        self.current_evade_type = 1
+        self.evade_distance = 20
+        self.evade_completed = False
+        # 朝向和生命值（原有代码不变）
         self.direction = "down"
-
-        self.max_health = 10  # 最大生命值
-        self.current_health = self.max_health  # 当前生命值
-        # 初始化动画帧（原有代码不变）
+        self.max_health = 10
+        self.current_health = self.max_health
+        # 初始化动画帧
         self._update_animation_frames()
+
+    # 移除原有的音效加载代码，攻击音效统一由main.py加载并传递给game_engine
 
     def _update_animation_frames(self):
         """更新动画帧（新增闪避动画优先级）"""
@@ -68,8 +68,8 @@ class Player:
                 self._update_animation_frames()
 
     def start_attack(self):
-        """触发攻击（原有代码不变，不修改）"""
-        if self.is_attacking or self.is_evading:  # 新增：闪避时禁止攻击
+        """触发攻击（无需在这播放音效，由game_engine统一处理）"""
+        if self.is_attacking or self.is_evading:
             return
         self.is_attacking = True
         self.current_frame = 0
