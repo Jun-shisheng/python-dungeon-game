@@ -426,20 +426,20 @@ class GameEngine:
             if self.attack_sound:
                 self.attack_sound.play()
 
-        # 攻击命中检测逻辑（原有不变）
-        attack_range = 30
-        player_radius = self.player.radius
-        hit_monster = False
-        for monster in self.monsters:
-            if not monster.is_active:
-                continue
-            dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
-            if dist < player_radius + attack_range:
-                # 攻击命中，怪物扣血
-                monster.current_health -= 1
-                print(f"🗡️  击中 {monster.type}! 剩余生命值: {monster.current_health}")
-                hit_monster = True
-                break
+            # 攻击命中检测逻辑（仅在未命中过的情况下检测）
+        if not self.player.attack_hit:
+            attack_range = 30
+            player_radius = self.player.radius
+            for monster in self.monsters:
+                if not monster.is_active:
+                    continue
+                dist = math.hypot(self.player.x - monster.x, self.player.y - monster.y)
+                if dist < player_radius + attack_range:
+                    # 攻击命中，怪物扣血
+                    monster.current_health -= 1
+                    self.player.attack_hit = True  # 标记为已命中
+                    print(f"🗡️  击中 {monster.type}! 剩余生命值: {monster.current_health}")
+                    break
 
         # 不提前结束攻击状态，让动画完整播放
 

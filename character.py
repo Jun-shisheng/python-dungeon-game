@@ -27,6 +27,7 @@ class Player:
         self.current_health = self.max_health
         # 初始化动画帧
         self._update_animation_frames()
+        self.attack_hit = False  # 新增：标记当前攻击是否已命中
 
     # 移除原有的音效加载代码，攻击音效统一由main.py加载并传递给game_engine
 
@@ -68,12 +69,13 @@ class Player:
                 self._update_animation_frames()
 
     def start_attack(self):
-        """触发攻击（无需在这播放音效，由game_engine统一处理）"""
+        """触发攻击（重置命中标记）"""
         if self.is_attacking or self.is_evading:
             return
         self.is_attacking = True
         self.current_frame = 0
         self.animation_timer = 0
+        self.attack_hit = False  # 重置命中标记
         self._update_animation_frames()
         print(f"⚔️  attack{self.current_attack_type} 开始 ({len(self.animation_frames)}帧)")
 
